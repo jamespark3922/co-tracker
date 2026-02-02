@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.gradio
+*.egg-info/
+
+gradio_demo/tmp
