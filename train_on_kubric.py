@@ -256,20 +256,20 @@ class Lite(LightningLite):
             if not args.debug:
                 final_dataloaders = [dl for dl in eval_dataloaders]
 
-                ds_name = "dynamic_replica"
-                final_dataloaders.append(
-                    (ds_name, get_eval_dataloader(args.dataset_root, ds_name))
-                )
+                # ds_name = "dynamic_replica"
+                # final_dataloaders.append(
+                #     (ds_name, get_eval_dataloader(args.dataset_root, ds_name))
+                # )
 
-                ds_name = "tapvid_robotap"
-                final_dataloaders.append(
-                    (ds_name, get_eval_dataloader(args.dataset_root, ds_name))
-                )
+                # ds_name = "tapvid_robotap"
+                # final_dataloaders.append(
+                #     (ds_name, get_eval_dataloader(args.dataset_root, ds_name))
+                # )
 
-                ds_name = "tapvid_kinetics_first"
-                final_dataloaders.append(
-                    (ds_name, get_eval_dataloader(args.dataset_root, ds_name))
-                )
+                # ds_name = "tapvid_kinetics_first"
+                # final_dataloaders.append(
+                #     (ds_name, get_eval_dataloader(args.dataset_root, ds_name))
+                # )
 
             evaluator = Evaluator(args.ckpt_path)
 
@@ -527,7 +527,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--num_nodes", type=int, default=1)
     parser.add_argument(
-        "--num_workers", type=int, default=10, help="number of dataloader workers"
+        "--num_workers", type=int, default=4, help="number of dataloader workers"
     )
 
     parser.add_argument(

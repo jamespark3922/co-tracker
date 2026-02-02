@@ -101,7 +101,7 @@ def get_train_dataset(args):
 
         kubric = kubric_movif_dataset.KubricMovifDataset(
             data_root=os.path.join(
-                args.dataset_root, "kubric/kubric_movi_f_120_frames_dense/movi_f"
+                args.dataset_root, "data", #"kubric/kubric_movi_f_120_frames_dense/movi_f"
             ),
             crop_size=args.crop_size,
             seq_len=args.sequence_len,
