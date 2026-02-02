@@ -261,10 +261,10 @@ class Lite(LightningLite):
                 #     (ds_name, get_eval_dataloader(args.dataset_root, ds_name))
                 # )
 
-                # ds_name = "tapvid_robotap"
-                # final_dataloaders.append(
-                #     (ds_name, get_eval_dataloader(args.dataset_root, ds_name))
-                # )
+                ds_name = "tapvid_robotap"
+                final_dataloaders.append(
+                    (ds_name, get_eval_dataloader(args.dataset_root, ds_name))
+                )
 
                 # ds_name = "tapvid_kinetics_first"
                 # final_dataloaders.append(
