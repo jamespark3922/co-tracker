@@ -1,0 +1,19 @@
+# @package _global_
+# CoTracker3 Offline Model Configuration
+# Processes entire video at once (better quality, more memory)
+
+model:
+  _target_: cotracker.models.core.cotracker.cotracker3_offline.CoTrackerThreeOffline
+  stride: 4
+  corr_radius: 3
+  corr_levels: 4
+  window_len: 60
+  num_virtual_tracks: 64
+  model_resolution: [384, 512]
+  linear_layer_for_vis_conf: true
+
+# Override training settings for offline model
+training:
+  offline_model: true
+  sequence_len: 24
+  sliding_window_len: 60

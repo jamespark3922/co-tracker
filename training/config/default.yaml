@@ -1,0 +1,76 @@
+# CoTracker Training Configuration
+# Usage: torchrun --nproc_per_node=8 training/launch.py exp_name=my_exp
+
+defaults:
+  - model: cotracker3_offline
+  - data: kubric
+  - optimizer: adamw_onecycle
+  - _self_
+
+# Experiment settings
+exp_name: cotracker3_kubric
+exp_dir: ./experiments/${exp_name}
+seed: 42
+
+# Training settings
+training:
+  num_steps: 50000
+  batch_size: 1
+  num_workers: 4
+  sequence_len: 24
+  traj_per_sample: 768
+  train_iters: 4
+  gradient_clip_norm: 1.0
+  mixed_precision: true
+  precision: bf16  # bf16 or fp16
+
+  # Loss settings
+  train_only_on_visible: false
+  add_huber_loss: true
+  query_sampling_method: null  # null or "random"
+
+  # Model-specific (overridden by model config)
+  offline_model: true
+  sliding_window_len: 16
+
+# Distributed settings
+distributed:
+  backend: nccl
+  timeout_mins: 30
+  find_unused_parameters: false
+  gradient_as_bucket_view: true
+  bucket_cap_mb: 25
+  broadcast_buffers: true
+
+# CUDA settings
+cuda:
+  cudnn_deterministic: false
+  cudnn_benchmark: false
+  allow_tf32: true
+
+# Checkpointing
+checkpoint:
+  save_dir: ${exp_dir}/checkpoints
+  save_every_n_epoch: 5
+  save_freq: 1000  # visualization frequency (steps)
+  evaluate_every_n_epoch: 5
+  resume_from: null  # path to resume checkpoint (full training state)
+  restore_ckpt: null  # path to pretrained weights only
+  validate_at_start: false
+
+# Logging
+logging:
+  use_wandb: true
+  wandb_project: cotracker3
+  wandb_entity: null
+  log_every_n_steps: 100
+  log_dir: ${exp_dir}/logs
+
+# Evaluation
+evaluation:
+  datasets:
+    - tapvid_davis_first
+  final_datasets:
+    - tapvid_davis_first
+    - tapvid_robotap
+  dataset_root: /weka/oe-training-default/mm-olmo/video_datasets/point_track/CoTracker3_Kubric/tapvid/

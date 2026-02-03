@@ -1,0 +1,19 @@
+# @package _global_
+# CoTracker3 Online Model Configuration
+# Processes video in sliding windows (streaming capable, less memory)
+
+model:
+  _target_: cotracker.models.core.cotracker.cotracker3_online.CoTrackerThreeOnline
+  stride: 4
+  corr_radius: 3
+  corr_levels: 4
+  window_len: 16
+  num_virtual_tracks: 64
+  model_resolution: [384, 512]
+  linear_layer_for_vis_conf: true
+
+# Override training settings for online model
+training:
+  offline_model: false
+  sequence_len: 24
+  sliding_window_len: 16
