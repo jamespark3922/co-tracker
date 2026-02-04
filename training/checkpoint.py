@@ -177,12 +177,17 @@ def find_latest_checkpoint(ckpt_dir: str) -> Optional[str]:
     """
     Find the latest checkpoint in a directory.
 
+    Handles both epoch-based (model_*.pth) and step-based (step_*.pth) checkpoints.
+    Returns the checkpoint with the highest step number.
+
     Args:
         ckpt_dir: Directory to search
 
     Returns:
         Path to latest checkpoint or None if no checkpoints found
     """
+    import re
+
     if not os.path.exists(ckpt_dir):
         return None
 
@@ -194,8 +199,30 @@ def find_latest_checkpoint(ckpt_dir: str) -> Optional[str]:
     if not ckpt_files:
         return None
 
-    # Sort by name (assumes naming like model_cotracker_three_000100.pth)
-    latest = sorted(ckpt_files)[-1]
+    def extract_step(filename):
+        """Extract step number from checkpoint filename."""
+        # Try step_XXXXXX.pth pattern first
+        match = re.search(r'step_(\d+)\.pth', filename)
+        if match:
+            return int(match.group(1))
+
+        # Try model_*_XXXXXX.pth pattern (epoch-based)
+        match = re.search(r'_(\d{6})\.pth$', filename)
+        if match:
+            return int(match.group(1))
+
+        # Fallback: try to find any number sequence
+        numbers = re.findall(r'\d+', filename)
+        if numbers:
+            return int(numbers[-1])
+
+        return 0
+
+    # Find checkpoint with highest step number
+    latest = max(ckpt_files, key=extract_step)
+    latest_step = extract_step(latest)
+    logging.info(f"Found latest checkpoint: {latest} (step {latest_step})")
+
     return os.path.join(ckpt_dir, latest)
 
 
