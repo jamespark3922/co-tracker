@@ -72,6 +72,8 @@ logging:
 evaluation:
   datasets:
     - tapvid_davis_first
+    - tapvid_robotap
+    - tapvid_stacking
   final_datasets:
     - tapvid_davis_first
     - tapvid_robotap
