@@ -540,3 +540,14 @@ class KubricMovifDataset(CoTrackerDataset):
 
     def __len__(self):
         return len(self.seq_names)
+
+if __name__ == "__main__":
+    dataset = KubricMovifDataset(
+        data_root="/weka/oe-training-default/mm-olmo/video_datasets/point_track/CoTracker3_Kubric/data",
+        split="train",
+        use_augs=True,
+    )
+    print(len(dataset))
+    for i in range(5):
+        sample, gotit = dataset[i]
+        print(i, gotit, sample.video.shape, sample.trajectory.shape)
