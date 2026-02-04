@@ -138,6 +138,11 @@ def get_train_dataset(args):
 
 def run_test_eval(evaluator, model, dataloaders, writer, step, query_random=False):
     model.eval()
+    def unwrap_model(model):
+        while hasattr(model, "module"):
+            model = model.module
+        return model
+    
     for ds_name, dataloader in dataloaders:
         visualize_every = 1
         grid_size = 5
@@ -159,7 +164,7 @@ def run_test_eval(evaluator, model, dataloaders, writer, step, query_random=Fals
             num_uniformly_sampled_pts = 100
 
         predictor = EvaluationPredictor(
-            model.module.module,
+            unwrap_model(model),
             grid_size=grid_size,
             local_grid_size=0,
             single_point=False,
