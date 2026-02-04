@@ -127,11 +127,12 @@ def forward_batch(
         loss_only_for_visible=True,
     )
 
-    confidence_loss = sequence_prob_loss(
-        coord_predictions, confidence_predictions, traj_gts, vis_gts
-    )
-
-    vis_loss = sequence_BCE_loss(vis_predictions, vis_gts)
+    # BCE loss only supports fp32?
+    with torch.amp.autocast('cuda', enabled=False):
+        confidence_loss = sequence_prob_loss(
+            coord_predictions, confidence_predictions, traj_gts, vis_gts
+        )
+        vis_loss = sequence_BCE_loss(vis_predictions, vis_gts)
 
     # Build output dictionary
     output = {
