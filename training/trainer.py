@@ -528,8 +528,8 @@ class Trainer:
                     output = forward_batch(batch, model_for_forward, self.forward_cfg)
                     loss = compute_total_loss(output)
 
-                # Logging (main process only)
-                if is_main_process():
+                # Logging (main process only, every N steps)
+                if is_main_process() and self.total_steps % cfg.logging.log_every_n_steps == 0:
                     self._log_training_step(output, loss, i_batch, save_freq, batch)
 
                 # Synchronize before backward
