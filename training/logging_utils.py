@@ -91,9 +91,10 @@ class WandbLogger:
                 reinit=True,
             )
 
-            if model is not None:
-                # Watch model for gradient logging
-                wandb.watch(model, log="gradients", log_freq=1000)
+            # Note: wandb.watch() disabled - it uses internal step counter
+            # that breaks on resume (logs to step 0,1,2... when training is at 500+)
+            # if model is not None:
+            #     wandb.watch(model, log="gradients", log_freq=1000)
 
             logging.info(f"Wandb initialized: {wandb.run.url}")
 
