@@ -158,7 +158,150 @@ class Trainer:
             self._setup_evaluation()
 
         barrier()
+
+        # Validate and log setup
+        self._validate_and_log_setup()
+
         logging.info(f"Trainer setup complete. Rank {self.rank}/{self.world_size}")
+
+    def _validate_and_log_setup(self):
+        """Validate setup and log configuration summary."""
+        cfg = self.cfg
+
+        if not is_main_process():
+            return
+
+        logging.info("\n" + "=" * 60)
+        logging.info("TRAINING CONFIGURATION SUMMARY")
+        logging.info("=" * 60)
+
+        # Experiment info
+        logging.info(f"\n[Experiment]")
+        logging.info(f"  Name: {cfg.exp_name}")
+        logging.info(f"  Dir: {cfg.exp_dir}")
+        logging.info(f"  Seed: {cfg.seed}")
+
+        # Distributed info
+        logging.info(f"\n[Distributed]")
+        logging.info(f"  World size: {self.world_size}")
+        logging.info(f"  Backend: {cfg.distributed.backend}")
+        logging.info(f"  Device: {self.device}")
+
+        # Model info
+        logging.info(f"\n[Model]")
+        model = self.model.module if hasattr(self.model, 'module') else self.model
+        total_params = sum(p.numel() for p in model.parameters())
+        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        logging.info(f"  Type: {type(model).__name__}")
+        logging.info(f"  Total params: {total_params:,}")
+        logging.info(f"  Trainable params: {trainable_params:,}")
+
+        # Check model dtype
+        param = next(model.parameters())
+        logging.info(f"  Param dtype: {param.dtype}")
+        logging.info(f"  Param device: {param.device}")
+
+        # Mixed precision info
+        logging.info(f"\n[Mixed Precision]")
+        logging.info(f"  Enabled: {cfg.training.mixed_precision}")
+        logging.info(f"  Precision: {cfg.training.precision}")
+        amp_dtype = torch.bfloat16 if cfg.training.precision == "bf16" else torch.float16
+        logging.info(f"  AMP dtype: {amp_dtype}")
+        logging.info(f"  GradScaler enabled: {self.scaler.is_enabled()}")
+
+        # Check bf16 support
+        if cfg.training.precision == "bf16":
+            bf16_supported = torch.cuda.is_bf16_supported()
+            logging.info(f"  BF16 hardware support: {bf16_supported}")
+            if not bf16_supported:
+                logging.warning("  WARNING: BF16 requested but not supported by hardware!")
+
+        # Optimizer info
+        logging.info(f"\n[Optimizer]")
+        logging.info(f"  Type: {type(self.optimizer).__name__}")
+        logging.info(f"  LR: {cfg.optimizer.lr}")
+        logging.info(f"  Weight decay: {cfg.optimizer.weight_decay}")
+        logging.info(f"  Scheduler: {type(self.scheduler).__name__}")
+
+        # Training info
+        logging.info(f"\n[Training]")
+        logging.info(f"  Num steps: {cfg.training.num_steps}")
+        logging.info(f"  Batch size: {cfg.training.batch_size}")
+        logging.info(f"  Effective batch size: {cfg.training.batch_size * self.world_size}")
+        logging.info(f"  Sequence length: {cfg.training.sequence_len}")
+        logging.info(f"  Traj per sample: {cfg.training.traj_per_sample}")
+        logging.info(f"  Train iters: {cfg.training.train_iters}")
+        logging.info(f"  Gradient clip norm: {cfg.training.gradient_clip_norm}")
+
+        # Data info
+        logging.info(f"\n[Data]")
+        logging.info(f"  Train loader batches: {len(self.train_loader)}")
+        logging.info(f"  Num workers: {cfg.training.num_workers}")
+
+        # Checkpoint info
+        logging.info(f"\n[Checkpoint]")
+        logging.info(f"  Save dir: {cfg.checkpoint.save_dir}")
+        logging.info(f"  Save every N epochs: {cfg.checkpoint.save_every_n_epoch}")
+        logging.info(f"  Resumed from step: {self.total_steps}")
+
+        # CUDA info
+        logging.info(f"\n[CUDA]")
+        logging.info(f"  cuDNN deterministic: {torch.backends.cudnn.deterministic}")
+        logging.info(f"  cuDNN benchmark: {torch.backends.cudnn.benchmark}")
+        logging.info(f"  TF32 enabled: {torch.backends.cuda.matmul.allow_tf32}")
+        logging.info(f"  GPU: {torch.cuda.get_device_name(self.device)}")
+        logging.info(f"  GPU memory: {torch.cuda.get_device_properties(self.device).total_memory / 1e9:.1f} GB")
+
+        # Sanity checks
+        logging.info(f"\n[Sanity Checks]")
+        checks_passed = True
+
+        # Check 1: Model on correct device
+        if param.device != self.device:
+            logging.error(f"  FAIL: Model not on expected device ({param.device} vs {self.device})")
+            checks_passed = False
+        else:
+            logging.info(f"  PASS: Model on correct device")
+
+        # Check 2: Scaler matches mixed precision setting
+        if cfg.training.mixed_precision and not self.scaler.is_enabled():
+            # Note: scaler is disabled for bf16, that's expected
+            if cfg.training.precision != "bf16":
+                logging.error(f"  FAIL: Mixed precision enabled but scaler disabled")
+                checks_passed = False
+            else:
+                logging.info(f"  PASS: Scaler disabled for bf16 (expected)")
+        else:
+            logging.info(f"  PASS: Scaler config consistent")
+
+        # Check 3: Optimizer has params
+        if len(self.optimizer.param_groups) == 0:
+            logging.error(f"  FAIL: Optimizer has no param groups")
+            checks_passed = False
+        else:
+            logging.info(f"  PASS: Optimizer has {len(self.optimizer.param_groups)} param group(s)")
+
+        # Check 4: Dataloader not empty
+        if len(self.train_loader) == 0:
+            logging.error(f"  FAIL: Train loader is empty")
+            checks_passed = False
+        else:
+            logging.info(f"  PASS: Train loader has {len(self.train_loader)} batches")
+
+        # Check 5: DDP wrapping (if multi-gpu)
+        if self.world_size > 1:
+            if not isinstance(self.model, DDP):
+                logging.error(f"  FAIL: Model not wrapped with DDP")
+                checks_passed = False
+            else:
+                logging.info(f"  PASS: Model wrapped with DDP")
+
+        logging.info("=" * 60)
+
+        if not checks_passed:
+            raise RuntimeError("Setup validation failed! Check logs above.")
+
+        logging.info("All sanity checks passed!\n")
 
     def _build_model(self):
         """Build model from config."""
@@ -192,11 +335,16 @@ class Trainer:
         )
 
     def _build_scaler(self):
-        """Build GradScaler for mixed precision."""
-        # NOTE: Original CoTracker uses GradScaler(enabled=False) because
-        # BCE loss in sequence_prob_loss is not autocast-safe.
-        # Lightning handles bf16 at model level, not via scaler.
-        self.scaler = GradScaler(enabled=False)
+        """Build GradScaler for mixed precision.
+
+        Note: GradScaler is only needed for fp16, not bf16.
+        bf16 has larger dynamic range and doesn't need loss scaling.
+        """
+        cfg = self.cfg.training
+        # Disable scaler for bf16 (not needed) or if mixed precision is off
+        use_scaler = cfg.mixed_precision and cfg.precision != "bf16"
+        self.scaler = GradScaler(enabled=use_scaler)
+        logging.info(f"GradScaler enabled: {use_scaler} (precision={cfg.precision})")
 
     def _build_dataloader(self):
         """Build training dataloader."""
@@ -220,7 +368,7 @@ class Trainer:
         logging.info(f"Train loader length: {len(self.train_loader)}")
 
     def _build_logger(self):
-        """Build wandb logger."""
+        """Build wandb logger with resume support."""
         self.logger = create_logger(
             project=self.cfg.logging.wandb_project,
             name=self.cfg.exp_name,
@@ -230,6 +378,7 @@ class Trainer:
             rank=self.rank,
             enabled=self.cfg.logging.use_wandb,
             model=self.model,
+            resume="allow",  # Auto-resume if run exists (for preemption)
         )
 
     def _load_checkpoint(self):
@@ -354,13 +503,11 @@ class Trainer:
                 # Get underlying model for forward
                 model_for_forward = model.module if hasattr(model, "module") else model
 
-                # Forward pass
-                # NOTE: We don't use autocast here because the original CoTracker code
-                # uses GradScaler(enabled=False). The BCE loss in sequence_prob_loss
-                # is not autocast-safe. Lightning handles bf16 at a different level.
-                output = forward_batch(batch, model_for_forward, self.forward_cfg)
-
-                loss = compute_total_loss(output)
+                # Forward pass with AMP
+                amp_dtype = torch.bfloat16 if cfg.training.precision == "bf16" else torch.float16
+                with torch.amp.autocast('cuda', enabled=cfg.training.mixed_precision, dtype=amp_dtype):
+                    output = forward_batch(batch, model_for_forward, self.forward_cfg)
+                    loss = compute_total_loss(output)
 
                 # Logging (main process only)
                 if is_main_process():
