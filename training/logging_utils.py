@@ -76,9 +76,13 @@ class WandbLogger:
             if dir is not None:
                 Path(dir).mkdir(parents=True, exist_ok=True)
 
+            # Use name as run ID for deterministic resume
+            run_id = name.replace("/", "_").replace(" ", "_")[:64] if resume else None
+
             wandb.init(
                 project=project,
                 name=name,
+                id=run_id,
                 config=config,
                 entity=entity,
                 dir=dir,
@@ -277,6 +281,7 @@ def create_logger(
     config: Optional[Dict] = None,
     rank: int = 0,
     enabled: bool = True,
+    resume: Optional[str] = "allow",
     **kwargs,
 ) -> Union[WandbLogger, DummyLogger]:
     """
@@ -288,6 +293,8 @@ def create_logger(
         config: Config dict
         rank: Distributed rank
         enabled: Whether logging is enabled
+        resume: Wandb resume mode ('allow', 'must', 'never', None)
+                'allow' = resume if run exists, else create new
 
     Returns:
         WandbLogger for rank 0, DummyLogger for other ranks
@@ -299,6 +306,7 @@ def create_logger(
             config=config,
             rank=rank,
             enabled=enabled,
+            resume=resume,
             **kwargs,
         )
     return DummyLogger()

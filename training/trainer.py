@@ -460,7 +460,7 @@ class Trainer:
             model_for_eval,
             self.eval_dataloaders,
             writer=None,  # We'll log to wandb instead
-            total_steps=self.total_steps,
+            step=self.total_steps,
             query_random=(
                 self.cfg.training.query_sampling_method is not None
                 and "random" in self.cfg.training.query_sampling_method
@@ -486,7 +486,7 @@ class Trainer:
             model_for_eval,
             self.final_dataloaders,
             writer=None,
-            total_steps=self.total_steps,
+            step=self.total_steps,
             query_random=(
                 self.cfg.training.query_sampling_method is not None
                 and "random" in self.cfg.training.query_sampling_method
