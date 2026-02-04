@@ -52,6 +52,8 @@ cuda:
 checkpoint:
   save_dir: ${exp_dir}/checkpoints
   save_every_n_epoch: 5
+  save_every_n_steps: null  # save checkpoint every N steps (null to disable)
+  evaluate_every_n_steps: null  # eval every N steps (null to disable)
   save_freq: 1000  # visualization frequency (steps)
   evaluate_every_n_epoch: 5
   resume_from: null  # path to resume checkpoint (full training state)

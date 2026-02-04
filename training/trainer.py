@@ -30,7 +30,7 @@ from hydra.utils import instantiate
 from cotracker.datasets.utils import collate_fn_train, dataclass_to_cuda_
 from cotracker.utils.visualizer import Visualizer
 from cotracker.evaluation.core.evaluator import Evaluator
-from cotracker.utils.train_utils import get_eval_dataloader, run_test_eval
+from training.eval import get_eval_dataloader, run_eval
 
 # Training imports
 from training.distributed import (
@@ -241,8 +241,27 @@ class Trainer:
         # Checkpoint info
         logging.info(f"\n[Checkpoint]")
         logging.info(f"  Save dir: {cfg.checkpoint.save_dir}")
-        logging.info(f"  Save every N epochs: {cfg.checkpoint.save_every_n_epoch}")
         logging.info(f"  Resumed from step: {self.total_steps}")
+
+        # Save frequency
+        if cfg.checkpoint.save_every_n_steps:
+            logging.info(f"  Save mode: step-based (every {cfg.checkpoint.save_every_n_steps} steps)")
+            if cfg.checkpoint.save_every_n_epoch:
+                logging.warning(f"  WARNING: save_every_n_epoch={cfg.checkpoint.save_every_n_epoch} ignored (step-based is set)")
+        elif cfg.checkpoint.save_every_n_epoch:
+            logging.info(f"  Save mode: epoch-based (every {cfg.checkpoint.save_every_n_epoch} epochs)")
+        else:
+            logging.warning(f"  WARNING: No checkpoint saving configured!")
+
+        # Eval frequency
+        if cfg.checkpoint.evaluate_every_n_steps:
+            logging.info(f"  Eval mode: step-based (every {cfg.checkpoint.evaluate_every_n_steps} steps)")
+            if cfg.checkpoint.evaluate_every_n_epoch:
+                logging.warning(f"  WARNING: evaluate_every_n_epoch={cfg.checkpoint.evaluate_every_n_epoch} ignored (step-based is set)")
+        elif cfg.checkpoint.evaluate_every_n_epoch:
+            logging.info(f"  Eval mode: epoch-based (every {cfg.checkpoint.evaluate_every_n_epoch} epochs)")
+        else:
+            logging.warning(f"  WARNING: No evaluation configured!")
 
         # CUDA info
         logging.info(f"\n[CUDA]")
@@ -530,6 +549,18 @@ class Trainer:
 
                 self.total_steps += 1
 
+                # Step-based checkpoint and evaluation (rank 0 only)
+                if is_main_process():
+                    # Save checkpoint by step
+                    if (cfg.checkpoint.save_every_n_steps
+                        and self.total_steps % cfg.checkpoint.save_every_n_steps == 0):
+                        self._save_step_checkpoint()
+
+                    # Evaluate by step
+                    if (cfg.checkpoint.evaluate_every_n_steps
+                        and self.total_steps % cfg.checkpoint.evaluate_every_n_steps == 0):
+                        self._evaluate()
+
                 # End of epoch handling
                 if is_main_process():
                     if (i_batch >= len(self.train_loader) - 1) or (
@@ -572,41 +603,65 @@ class Trainer:
         pass
 
     def _end_of_epoch(self, epoch):
-        """Handle end of epoch: save checkpoint and evaluate."""
+        """Handle end of epoch: save checkpoint and evaluate.
+
+        Note: Epoch-based save/eval is skipped if step-based is configured.
+        """
         cfg = self.cfg
 
-        # Save checkpoint
-        if (epoch + 1) % cfg.checkpoint.save_every_n_epoch == 0:
-            ckpt_iter = str(self.total_steps).zfill(6)
-            save_path = Path(cfg.checkpoint.save_dir) / f"model_{cfg.exp_name}_{ckpt_iter}.pth"
+        # Save checkpoint (skip if step-based saving is enabled)
+        if cfg.checkpoint.save_every_n_steps is None:
+            if (epoch + 1) % cfg.checkpoint.save_every_n_epoch == 0:
+                ckpt_iter = str(self.total_steps).zfill(6)
+                save_path = Path(cfg.checkpoint.save_dir) / f"model_{cfg.exp_name}_{ckpt_iter}.pth"
 
-            save_checkpoint(
-                str(save_path),
-                self.model,
-                self.optimizer,
-                self.scheduler,
-                self.scaler,
-                self.total_steps,
-                epoch,
-                self.cfg,
-                rank=self.rank,
-            )
+                save_checkpoint(
+                    str(save_path),
+                    self.model,
+                    self.optimizer,
+                    self.scheduler,
+                    self.scaler,
+                    self.total_steps,
+                    epoch,
+                    self.cfg,
+                    rank=self.rank,
+                )
 
-        # Evaluate
-        if (epoch + 1) % cfg.checkpoint.evaluate_every_n_epoch == 0 or (
-            cfg.checkpoint.validate_at_start and epoch == 0
-        ):
+        # Evaluate (skip if step-based eval is enabled, except validate_at_start)
+        should_eval_epoch = (epoch + 1) % cfg.checkpoint.evaluate_every_n_epoch == 0
+        validate_at_start = cfg.checkpoint.validate_at_start and epoch == 0
+
+        if cfg.checkpoint.evaluate_every_n_steps is None:
+            if should_eval_epoch or validate_at_start:
+                self._evaluate()
+        elif validate_at_start:
+            # Always allow validate_at_start even if step-based eval is set
             self._evaluate()
+
+    def _save_step_checkpoint(self):
+        """Save checkpoint at current step."""
+        save_path = Path(self.cfg.checkpoint.save_dir) / f"step_{self.total_steps:06d}.pth"
+
+        save_checkpoint(
+            str(save_path),
+            self.model,
+            self.optimizer,
+            self.scheduler,
+            self.scaler,
+            self.total_steps,
+            self.epoch,
+            self.cfg,
+            rank=self.rank,
+        )
+        logging.info(f"Saved step checkpoint: {save_path}")
 
     def _evaluate(self):
         """Run evaluation."""
-        model_for_eval = self.model.module if hasattr(self.model, "module") else self.model
-
-        run_test_eval(
+        run_eval(
             self.evaluator,
-            model_for_eval,
+            self.model,  # run_eval handles unwrapping
             self.eval_dataloaders,
-            writer=None,  # We'll log to wandb instead
+            logger=self.logger,
             step=self.total_steps,
             query_random=(
                 self.cfg.training.query_sampling_method is not None
@@ -626,13 +681,11 @@ class Trainer:
         save_final_model(str(final_path), self.model, rank=self.rank)
 
         # Final evaluation
-        model_for_eval = self.model.module if hasattr(self.model, "module") else self.model
-
-        run_test_eval(
+        run_eval(
             self.evaluator,
-            model_for_eval,
+            self.model,  # run_eval handles unwrapping
             self.final_dataloaders,
-            writer=None,
+            logger=self.logger,
             step=self.total_steps,
             query_random=(
                 self.cfg.training.query_sampling_method is not None
