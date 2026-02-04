@@ -65,7 +65,7 @@ logging:
   use_wandb: true
   wandb_project: cotracker3
   wandb_entity: null
-  log_every_n_steps: 100
+  log_every_n_steps: 20
   log_dir: ${exp_dir}/logs
 
 # Evaluation
