@@ -331,7 +331,7 @@ class TestIntegration:
         from cotracker.datasets.kubric_movif_dataset import KubricMovifDataset
 
         ds = KubricMovifDataset(
-            data_root="/weka/oe-training-default/mm-olmo/video_datasets/point_track/CoTracker3_Kubric/",
+            data_root="/weka/oe-training-default/mm-olmo/video_datasets/point_track/CoTracker3_Kubric/data",
             crop_size=[384, 512],
             seq_len=24,
             traj_per_sample=768,
