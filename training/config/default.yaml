@@ -77,4 +77,5 @@ evaluation:
   final_datasets:
     - tapvid_davis_first
     - tapvid_robotap
+    - tapvid_stacking
   dataset_root: /weka/oe-training-default/mm-olmo/video_datasets/point_track/CoTracker3_Kubric/tapvid/
